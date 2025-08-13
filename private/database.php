@@ -34,7 +34,5 @@ function connect_db() {
 
 $pdo = connect_db();
 
-var_dump($pdo);
-
 
 ?>
