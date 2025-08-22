@@ -38,7 +38,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if (empty($error)) {
-        $message = "Compte créé avec succès";
+        try {
+            // Vérifier si l'email existe déjà
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            
+            if ($stmt->rowCount() > 0) {
+                $error[] = "Cette adresse email est déjà utilisée";
+            } else {
+                // Hacher le mot de passe
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                
+                // Insérer l'utilisateur dans la base de données
+                $stmt = $pdo->prepare("INSERT INTO users (nom, email, mdp) VALUES (?, ?, ?)");
+                $result = $stmt->execute([$name, $email, $hashed_password]);
+                
+                if ($result) {
+                    $message = "Compte créé avec succès ! Vous pouvez maintenant vous connecter.";
+                    
+                    // Vider les champs après succès
+                    $name = $email = "";
+                    // Rediriger vers la page de connexion après 3 secondes
+                    header("refresh:3;url=login.php");
+                } else {
+                    $error[] = "Erreur lors de la création du compte";
+                }
+            }
+        } catch (PDOException $e) {
+            $error[] = "Erreur de base de données : " . $e->getMessage();
+        } catch (Exception $e) {
+            $error[] = "Erreur générale : " . $e->getMessage();
+        }
     }
 }
 

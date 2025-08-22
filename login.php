@@ -1,3 +1,72 @@
+<?php
+require_once 'private/database.php';
+
+$error = [];
+$message = "";
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $email = isset($_POST['email']) ? htmlspecialchars($_POST['email']) : "";
+    $password = isset($_POST['password']) ? $_POST['password'] : "";
+    $remember = isset($_POST['remember']) ? true : false;
+
+    // Validation des données
+    if (empty($email)) {
+        $error[] = "L'email est requis";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error[] = "L'email n'est pas valide";
+    }
+
+    if (empty($password)) {
+        $error[] = "Le mot de passe est requis";
+    }
+
+    if (empty($error)) {
+        try {
+            // Vérifier si l'utilisateur existe avec cet email
+            $stmt = $pdo->prepare("SELECT id, nom, email, mdp FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            
+            if ($stmt->rowCount() > 0) {
+                $user = $stmt->fetch();
+                
+                // Vérifier le mot de passe
+                if (password_verify($password, $user['mdp'])) {
+                    // Connexion réussie
+                    session_start();
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['user_email'] = $user['email'];
+                    $_SESSION['logged_in'] = true;
+                    
+                    // Option "Se souvenir de moi"
+                    if ($remember) {
+                        // Créer un cookie sécurisé pour "se souvenir"
+                        $token = bin2hex(random_bytes(32));
+                        setcookie('remember_token', $token, time() + (30 * 24 * 60 * 60), '/'); // 30 jours
+                        
+                        // Stocker le token en base de données (optionnel)
+                        // $stmt = $pdo->prepare("UPDATE users SET remember_token = ? WHERE id = ?");
+                        // $stmt->execute([$token, $user['id']]);
+                    }
+                    
+                    $message = "Connexion réussie ! Redirection...";
+                    
+                    // Rediriger vers la page d'accueil ou dashboard
+                    header("refresh:2;url=home.php");
+                } else {
+                    $error[] = "Email ou mot de passe incorrect";
+                }
+            } else {
+                $error[] = "Email ou mot de passe incorrect";
+            }
+        } catch (PDOException $e) {
+            $error[] = "Erreur de base de données : " . $e->getMessage();
+        } catch (Exception $e) {
+            $error[] = "Erreur générale : " . $e->getMessage();
+        }
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -19,15 +88,24 @@
             <p>Connectez-vous à votre compte Velo</p>
             
             <form class="form" action="#" method="POST">
-                <!-- Message d'exemple -->
-                <div class="form-message error">
-                    Email ou mot de passe incorrect
-                </div>
+                <?php if (!empty($error)): ?>
+                    <div class="form-message error">
+                        <?php foreach ($error as $err): ?>
+                            <div><?php echo $err; ?></div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($message)): ?>
+                    <div class="form-message success">
+                        <?php echo $message; ?>
+                    </div>
+                <?php endif; ?>
                 
                 <!-- Email -->
                 <div class="form-group has-icon email">
                     <label for="email">Adresse email</label>
-                    <input type="email" id="email" name="email" class="form-input" placeholder="votre@email.com" required>
+                    <input type="email" id="email" name="email" class="form-input" placeholder="votre@email.com" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required>
                 </div>
                 
                 <!-- Mot de passe -->
@@ -38,7 +116,7 @@
                 
                 <!-- Checkbox "Se souvenir de moi" -->
                 <div class="form-checkbox">
-                    <input type="checkbox" id="remember" name="remember">
+                    <input type="checkbox" id="remember" name="remember" <?php echo isset($_POST['remember']) ? 'checked' : ''; ?>>
                     <label for="remember">Se souvenir de moi</label>
                 </div>
                 
